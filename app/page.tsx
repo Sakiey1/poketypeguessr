@@ -1,65 +1,102 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { PixelButton } from "@/components/PixelButton";
+import { getSocket } from "@/lib/socket-client";
+
+export default function HomePage() {
+  const router = useRouter();
+  const socket = getSocket();
+  const [playerName, setPlayerName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const sanitizedName = playerName.trim().slice(0, 16);
+  const canSubmit = sanitizedName.length > 0;
+
+  const createRoom = () => {
+    if (!canSubmit) {
+      setError("Enter a player name first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    socket.emit("create_room", { playerName: sanitizedName }, ({ roomCode }: { roomCode: string }) => {
+      localStorage.setItem("poketypeguessr:name", sanitizedName);
+      localStorage.setItem("poketypeguessr:roomCode", roomCode);
+      setBusy(false);
+      router.push(`/lobby/${roomCode}`);
+    });
+  };
+
+  const joinRoom = () => {
+    if (!canSubmit) {
+      setError("Enter a player name first.");
+      return;
+    }
+    const roomCode = joinCode.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+    if (roomCode.length !== 4) {
+      setError("Room code must be 4 letters.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    socket.emit(
+      "join_room",
+      { roomCode, playerName: sanitizedName },
+      ({ ok, error: joinError }: { ok: boolean; error?: string }) => {
+        setBusy(false);
+        if (!ok) {
+          setError(joinError ?? "Unable to join room.");
+          return;
+        }
+        localStorage.setItem("poketypeguessr:name", sanitizedName);
+        localStorage.setItem("poketypeguessr:roomCode", roomCode);
+        router.push(`/lobby/${roomCode}`);
+      },
+    );
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+    <main className="flex min-h-screen items-center justify-center bg-[#f7f4e7] p-6">
+      <div className="w-full max-w-xl border-4 border-black bg-white p-6 space-y-6">
+        <h1 className="font-press text-2xl text-center">PoketypeGuessr</h1>
+        <p className="font-pixel text-xl text-center">Race your rival to match the dual type!</p>
+
+        <label className="block">
+          <span className="font-press text-xs uppercase">Player Name</span>
+          <input
+            value={playerName}
+            onChange={(event) => setPlayerName(event.target.value)}
+            className="mt-2 w-full border-4 border-black px-3 py-2 font-pixel text-2xl bg-[#f7f4e7]"
+            maxLength={16}
+          />
+        </label>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <PixelButton disabled={!canSubmit || busy} onClick={createRoom} className="w-full">
+            Create Room
+          </PixelButton>
+          <div className="space-y-2">
+            <input
+              value={joinCode}
+              onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+              placeholder="ABCD"
+              className="w-full border-4 border-black px-3 py-2 font-press text-center text-lg tracking-[0.3em] bg-[#f7f4e7]"
+              maxLength={4}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <PixelButton disabled={!canSubmit || busy} onClick={joinRoom} className="w-full" variant="secondary">
+              Join Room
+            </PixelButton>
+          </div>
         </div>
-      </main>
-    </div>
+
+        {error && <p className="font-pixel text-xl text-[#c03028]">{error}</p>}
+      </div>
+    </main>
   );
 }
