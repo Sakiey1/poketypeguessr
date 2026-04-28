@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## PoketypeGuessr
 
-## Getting Started
+Real-time 2-player Pokemon dual-type guessing game built with Next.js + Socket.io on a custom Node server.
 
-First, run the development server:
+## Local Development
+
+Install dependencies and run:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Railway Deployment (One-Click Ready)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This repo includes Railway-ready config:
 
-## Learn More
+- `railway.json` with build and start commands
+- `Procfile` fallback process definition
+- production start script (`npm run start`)
 
-To learn more about Next.js, take a look at the following resources:
+### Deploy Steps
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Push this repo to GitHub.
+2. In Railway, click **New Project** -> **Deploy from GitHub Repo**.
+3. Select this repository.
+4. Railway should auto-detect Node and use:
+   - Build: `npm install && npm run build`
+   - Start: `npm run start`
+5. Once deployed, open the generated Railway domain.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Notes
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- The server binds to Railway's `PORT` automatically via `server.js`.
+- Room/game state is in-memory, so it resets on redeploy or restart.
+- For production multiplayer reliability, run a single instance (or add shared state/adapter later).
