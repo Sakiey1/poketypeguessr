@@ -17,6 +17,14 @@ const vt323 = VT323({
 export const metadata: Metadata = {
   title: "PoketypeGuessr",
   description: "Real-time dual-type Pokemon race",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({
