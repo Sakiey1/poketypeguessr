@@ -9,6 +9,9 @@
     "lint": "eslint",
     "build:pokemon-data": "tsx scripts/build-pokemon-data.ts"
   },
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "dependencies": {
     "clsx": "^2.1.1",
     "next": "16.2.4",

@@ -12,6 +12,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+Node.js `20.9+` is required.
+
 ## Railway Deployment (One-Click Ready)
 
 This repo includes Railway-ready config:
