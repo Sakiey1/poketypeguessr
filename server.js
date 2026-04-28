@@ -107,6 +107,12 @@ const emitNewCombo = (io, room, isFirst = false) => {
   });
 };
 
+const emitCurrentCombo = (socket, room) => {
+  if (room.game.started && room.game.currentCombo) {
+    socket.emit("new_combo", { combo: room.game.currentCombo, comboNumber: room.game.comboNumber });
+  }
+};
+
 const getRoundExample = (room) =>
   getDualTypePool(room).find(
     (pokemon) =>
@@ -222,6 +228,7 @@ app.prepare().then(() => {
       if (existingBySocket) {
         socket.join(room.code);
         emitRoomState(io, room);
+        emitCurrentCombo(socket, room);
         callback({ ok: true });
         return;
       }
@@ -237,6 +244,7 @@ app.prepare().then(() => {
           room.hostId = socket.id;
         }
         emitRoomState(io, room);
+        emitCurrentCombo(socket, room);
         callback({ ok: true });
         return;
       }
@@ -257,6 +265,7 @@ app.prepare().then(() => {
       room.players.push({ id: socket.id, name: playerName, score: 0, connected: true });
       socket.join(room.code);
       emitRoomState(io, room);
+      emitCurrentCombo(socket, room);
       callback({ ok: true });
     });
 
@@ -269,9 +278,7 @@ app.prepare().then(() => {
         return;
       }
       emitRoomState(io, room);
-      if (room.game.started && room.game.currentCombo) {
-        socket.emit("new_combo", { combo: room.game.currentCombo, comboNumber: room.game.comboNumber });
-      }
+      emitCurrentCombo(socket, room);
     });
 
     socket.on("update_settings", ({ roomCode, targetScore, generations, includeAltForms }) => {

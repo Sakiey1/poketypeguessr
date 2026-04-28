@@ -4,21 +4,21 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { PixelButton } from "@/components/PixelButton";
-import { getSocket } from "@/lib/socket-client";
+import { useSocket } from "@/lib/use-socket";
 
 export default function HomePage() {
   const router = useRouter();
-  const socket = getSocket();
+  const socket = useSocket();
   const [playerName, setPlayerName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const sanitizedName = playerName.trim().slice(0, 16);
-  const canSubmit = sanitizedName.length > 0;
+  const canSubmit = sanitizedName.length > 0 && Boolean(socket);
 
   const createRoom = () => {
-    if (!canSubmit) {
+    if (!socket || !canSubmit) {
       setError("Enter a player name first.");
       return;
     }
@@ -33,7 +33,7 @@ export default function HomePage() {
   };
 
   const joinRoom = () => {
-    if (!canSubmit) {
+    if (!socket || !canSubmit) {
       setError("Enter a player name first.");
       return;
     }

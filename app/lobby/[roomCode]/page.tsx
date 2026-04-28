@@ -1,52 +1,64 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { PixelButton } from "@/components/PixelButton";
-import { getSocket } from "@/lib/socket-client";
 import type { LobbySettings, RoomStatePayload } from "@/lib/types";
+import { useSocket } from "@/lib/use-socket";
 
 const SCORE_OPTIONS = [5, 10, 15, 20];
 
 export default function LobbyPage() {
   const params = useParams<{ roomCode: string }>();
   const router = useRouter();
-  const socket = getSocket();
+  const socket = useSocket();
   const roomCode = (params.roomCode ?? "").toUpperCase();
   const [state, setState] = useState<RoomStatePayload | null>(null);
-  const [selfId, setSelfId] = useState(socket.id ?? "");
+  const [selfId, setSelfId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [showCustomTarget, setShowCustomTarget] = useState(false);
   const [customTargetInput, setCustomTargetInput] = useState("10");
+  const [playerName] = useState(() =>
+    typeof window === "undefined" ? "" : (localStorage.getItem("poketypeguessr:name") ?? ""),
+  );
 
   useEffect(() => {
-    const onConnect = () => setSelfId(socket.id ?? "");
+    if (!socket) {
+      return;
+    }
+
+    const syncState = () => {
+      setSelfId(socket.id ?? "");
+      if (roomCode) {
+        socket.emit("sync_state", { roomCode });
+      }
+    };
     const onRoomState = (payload: RoomStatePayload) => setState(payload);
     const onGameStarted = () => router.push(`/game/${roomCode}`);
     const onError = ({ message }: { message: string }) => setError(message);
 
-    socket.on("connect", onConnect);
+    socket.on("connect", syncState);
     socket.on("room_state", onRoomState);
     socket.on("game_started", onGameStarted);
     socket.on("error", onError);
 
-    if (roomCode) {
-      socket.emit("sync_state", { roomCode });
+    if (socket.connected) {
+      syncState();
+    } else if (roomCode) {
+      socket.connect();
     }
 
     return () => {
-      socket.off("connect", onConnect);
+      socket.off("connect", syncState);
       socket.off("room_state", onRoomState);
       socket.off("game_started", onGameStarted);
       socket.off("error", onError);
     };
   }, [roomCode, router, socket]);
 
-  const playerName = useMemo(() => localStorage.getItem("poketypeguessr:name") ?? "", []);
-
   useEffect(() => {
-    if (!roomCode || !playerName) {
+    if (!socket || !roomCode || !playerName) {
       return;
     }
     if (selfId && state?.players.some((player) => player.id === selfId)) {
@@ -77,6 +89,9 @@ export default function LobbyPage() {
   const shouldShowCustomTarget = showCustomTarget || !isPresetTarget;
 
   const updateSettings = (nextSettings: LobbySettings) => {
+    if (!socket) {
+      return;
+    }
     socket.emit("update_settings", { roomCode, ...nextSettings });
   };
 
@@ -214,13 +229,13 @@ export default function LobbyPage() {
         {error && <p className="font-pixel text-xl text-[#c03028]">{error}</p>}
 
         <div className="flex flex-wrap gap-3">
-          <PixelButton disabled={!canStart} onClick={() => socket.emit("start_game", { roomCode })}>
+          <PixelButton disabled={!socket || !canStart} onClick={() => socket?.emit("start_game", { roomCode })}>
             Start Game
           </PixelButton>
           <PixelButton
             variant="danger"
             onClick={() => {
-              socket.emit("leave_room", { roomCode });
+              socket?.emit("leave_room", { roomCode });
               router.push("/");
             }}
           >

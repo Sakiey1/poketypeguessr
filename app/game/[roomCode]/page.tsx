@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { PixelButton } from "@/components/PixelButton";
 import { PokemonSearchDropdown } from "@/components/PokemonSearchDropdown";
@@ -10,8 +10,8 @@ import { ScoreBar } from "@/components/ScoreBar";
 import { SpeechBox } from "@/components/SpeechBox";
 import { TypeBadge } from "@/components/TypeBadge";
 import pokemonData from "@/data/pokemon.json";
-import { getSocket } from "@/lib/socket-client";
 import type { PokemonEntry, RoomStatePayload, TypeCombo } from "@/lib/types";
+import { useSocket } from "@/lib/use-socket";
 
 type RoundResultPayload = {
   winnerId: string | null;
@@ -23,10 +23,10 @@ type RoundResultPayload = {
 export default function GamePage() {
   const params = useParams<{ roomCode: string }>();
   const router = useRouter();
-  const socket = getSocket();
+  const socket = useSocket();
   const roomCode = (params.roomCode ?? "").toUpperCase();
   const [roomState, setRoomState] = useState<RoomStatePayload | null>(null);
-  const [selfId, setSelfId] = useState(socket.id ?? "");
+  const [selfId, setSelfId] = useState("");
   const [currentCombo, setCurrentCombo] = useState<TypeCombo | null>(null);
   const [roundResult, setRoundResult] = useState<RoundResultPayload | null>(null);
   const [gameOver, setGameOver] = useState<{
@@ -38,11 +38,21 @@ export default function GamePage() {
   const [playAgainVotes, setPlayAgainVotes] = useState(0);
   const [playAgainNeeded, setPlayAgainNeeded] = useState(2);
   const [hasVotedPlayAgain, setHasVotedPlayAgain] = useState(false);
-
-  const playerName = useMemo(() => localStorage.getItem("poketypeguessr:name") ?? "", []);
+  const [playerName] = useState(() =>
+    typeof window === "undefined" ? "" : (localStorage.getItem("poketypeguessr:name") ?? ""),
+  );
 
   useEffect(() => {
-    const onConnect = () => setSelfId(socket.id ?? "");
+    if (!socket) {
+      return;
+    }
+
+    const syncState = () => {
+      setSelfId(socket.id ?? "");
+      if (roomCode) {
+        socket.emit("sync_state", { roomCode });
+      }
+    };
     const onRoomState = (payload: RoomStatePayload) => {
       setRoomState(payload);
       setScoresByPlayerId(
@@ -93,7 +103,7 @@ export default function GamePage() {
       setPlayAgainNeeded(needed);
     };
 
-    socket.on("connect", onConnect);
+    socket.on("connect", syncState);
     socket.on("room_state", onRoomState);
     socket.on("game_started", onGameStarted);
     socket.on("new_combo", onNewCombo);
@@ -104,12 +114,14 @@ export default function GamePage() {
     socket.on("skip_vote_update", onSkipVoteUpdate);
     socket.on("play_again_vote_update", onPlayAgainVoteUpdate);
 
-    if (roomCode) {
-      socket.emit("sync_state", { roomCode });
+    if (socket.connected) {
+      syncState();
+    } else if (roomCode) {
+      socket.connect();
     }
 
     return () => {
-      socket.off("connect", onConnect);
+      socket.off("connect", syncState);
       socket.off("room_state", onRoomState);
       socket.off("game_started", onGameStarted);
       socket.off("new_combo", onNewCombo);
@@ -123,7 +135,7 @@ export default function GamePage() {
   }, [roomCode, socket]);
 
   useEffect(() => {
-    if (!roomCode || !playerName) {
+    if (!socket || !roomCode || !playerName) {
       return;
     }
     if (selfId && roomState?.players.some((player) => player.id === selfId)) {
@@ -152,7 +164,7 @@ export default function GamePage() {
     }
   }, [roomCode, roomState, router]);
 
-  if (!roomState || !currentCombo || !me || !opponent) {
+  if (!socket || !roomState || !currentCombo || !me || !opponent) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[#f7f4e7] font-pixel text-2xl">
         Loading battle...
