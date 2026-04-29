@@ -19,6 +19,7 @@ export default function LobbyPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCustomTarget, setShowCustomTarget] = useState(false);
   const [customTargetInput, setCustomTargetInput] = useState("10");
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [playerName] = useState(() =>
     typeof window === "undefined" ? "" : (localStorage.getItem("poketypeguessr:name") ?? ""),
   );
@@ -108,12 +109,31 @@ export default function LobbyPage() {
     });
   };
 
+  const copyInviteLink = async () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const inviteUrl = `${window.location.origin}/join/${roomCode}`;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopyStatus("Invite link copied!");
+    } catch {
+      setCopyStatus("Couldn't copy link automatically.");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#f7f4e7] p-6">
       <div className="mx-auto max-w-4xl border-4 border-black bg-white p-6 space-y-6">
         <h1 className="font-press text-2xl text-center">Lobby</h1>
         <div className="font-press text-sm text-center">
           Room Code: <span className="tracking-[0.3em]">{roomCode}</span>
+        </div>
+        <div className="flex items-center justify-center gap-3">
+          <PixelButton variant="secondary" onClick={copyInviteLink}>
+            Copy Link
+          </PixelButton>
+          {copyStatus && <span className="font-pixel text-xl">{copyStatus}</span>}
         </div>
 
         <div className="grid gap-2">
