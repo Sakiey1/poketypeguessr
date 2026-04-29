@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { PixelButton } from "@/components/PixelButton";
 import type { LobbySettings, RoomStatePayload } from "@/lib/types";
@@ -20,8 +20,9 @@ export default function LobbyPage() {
   const [showCustomTarget, setShowCustomTarget] = useState(false);
   const [customTargetInput, setCustomTargetInput] = useState("10");
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
-  const [playerName] = useState(() =>
-    typeof window === "undefined" ? "" : (localStorage.getItem("poketypeguessr:name") ?? ""),
+  const playerName = useMemo(
+    () => (typeof window === "undefined" ? "" : (window.localStorage.getItem("poketypeguessr:name") ?? "")),
+    [],
   );
 
   useEffect(() => {

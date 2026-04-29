@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { PixelButton } from "@/components/PixelButton";
 import { PokemonSearchDropdown } from "@/components/PokemonSearchDropdown";
@@ -38,8 +38,9 @@ export default function GamePage() {
   const [playAgainVotes, setPlayAgainVotes] = useState(0);
   const [playAgainNeeded, setPlayAgainNeeded] = useState(2);
   const [hasVotedPlayAgain, setHasVotedPlayAgain] = useState(false);
-  const [playerName] = useState(() =>
-    typeof window === "undefined" ? "" : (localStorage.getItem("poketypeguessr:name") ?? ""),
+  const playerName = useMemo(
+    () => (typeof window === "undefined" ? "" : (window.localStorage.getItem("poketypeguessr:name") ?? "")),
+    [],
   );
 
   useEffect(() => {
