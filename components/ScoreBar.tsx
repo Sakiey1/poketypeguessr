@@ -13,24 +13,24 @@ export function ScoreBar({ label, score, targetScore, highlighted = false }: Sco
   return (
     <div
       className={clsx(
-        "w-full border-4 border-black bg-white p-3 font-pixel",
+        "w-full border-4 border-black bg-white p-4 font-pixel",
         highlighted && "bg-[#f7f4e7]",
       )}
     >
-      <div className="text-sm uppercase">{label}</div>
-      <div className="flex items-center justify-between gap-3 mt-1">
-        <div className="flex flex-wrap gap-1">
+      <div className="text-xl uppercase leading-tight">{label}</div>
+      <div className="flex items-center justify-between gap-3 mt-2">
+        <div className="flex flex-wrap gap-1.5">
           {pips.map((filled, index) => (
             <span
               key={`${label}-${index}`}
               className={clsx(
-                "inline-block h-3 w-4 border border-black",
+                "inline-block h-4 w-5 border-2 border-black",
                 filled ? "bg-[#78c850]" : "bg-transparent",
               )}
             />
           ))}
         </div>
-        <div className="font-press text-xs">
+        <div className="font-press text-sm">
           {score}/{targetScore}
         </div>
       </div>

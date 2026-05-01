@@ -62,40 +62,45 @@ export default function HomePage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f7f4e7] p-6">
-      <div className="w-full max-w-xl border-4 border-black bg-white p-6 space-y-6">
-        <h1 className="font-press text-2xl text-center">PoketypeGuessr</h1>
-        <p className="font-pixel text-xl text-center">Race your rival to match the dual type!</p>
+    <main className="flex min-h-screen items-center justify-center bg-[#f7f4e7] p-8 md:p-10">
+      <div className="w-full max-w-3xl border-4 border-black bg-white p-8 md:p-10 space-y-8">
+        <h1 className="font-press text-3xl md:text-4xl text-center">PoketypeGuessr</h1>
+        <p className="font-pixel text-2xl md:text-3xl text-center">Race your rival to match the dual type!</p>
 
         <label className="block">
-          <span className="font-press text-xs uppercase">Player Name</span>
+          <span className="font-press text-sm md:text-base uppercase">Player Name</span>
           <input
             value={playerName}
             onChange={(event) => setPlayerName(event.target.value)}
-            className="mt-2 w-full border-4 border-black px-3 py-2 font-pixel text-2xl bg-[#f7f4e7]"
+            className="mt-2 w-full border-4 border-black px-4 py-3 font-pixel text-3xl bg-[#f7f4e7]"
             maxLength={16}
           />
         </label>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <PixelButton disabled={!canSubmit || busy} onClick={createRoom} className="w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <PixelButton disabled={!canSubmit || busy} onClick={createRoom} className="w-full text-2xl md:text-3xl py-3">
             Create Room
           </PixelButton>
-          <div className="space-y-2">
+          <div className="space-y-3">
             <input
               value={joinCode}
               onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
               placeholder="ABCD"
-              className="w-full border-4 border-black px-3 py-2 font-press text-center text-lg tracking-[0.3em] bg-[#f7f4e7]"
+              className="w-full border-4 border-black px-4 py-3 font-press text-center text-2xl tracking-[0.3em] bg-[#f7f4e7]"
               maxLength={4}
             />
-            <PixelButton disabled={!canSubmit || busy} onClick={joinRoom} className="w-full" variant="secondary">
+            <PixelButton
+              disabled={!canSubmit || busy}
+              onClick={joinRoom}
+              className="w-full text-lg md:text-xl py-3"
+              variant="secondary"
+            >
               Join Room
             </PixelButton>
           </div>
         </div>
 
-        {error && <p className="font-pixel text-xl text-[#c03028]">{error}</p>}
+        {error && <p className="font-pixel text-2xl text-[#c03028]">{error}</p>}
       </div>
     </main>
   );

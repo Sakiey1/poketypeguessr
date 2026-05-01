@@ -47,9 +47,9 @@ export function PokemonSearchDropdown({
   };
 
   return (
-    <div className="w-full max-w-xl border-4 border-black bg-[#f7f4e7]">
-      <div className="flex items-center border-b-4 border-black px-3 py-2 gap-2">
-        <span className="text-lg">🔍</span>
+    <div className="w-full max-w-2xl border-4 border-black bg-[#f7f4e7]">
+      <div className="flex items-center border-b-4 border-black px-4 py-3 gap-3">
+        <span className="text-2xl">🔍</span>
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -61,35 +61,35 @@ export function PokemonSearchDropdown({
           }}
           disabled={disabled}
           placeholder={disabled ? "Waiting..." : "Search Pokemon..."}
-          className="w-full bg-transparent font-pixel text-lg outline-none"
+          className="w-full bg-transparent font-pixel text-2xl outline-none"
         />
         <button
           type="button"
           onClick={clearInput}
           disabled={!query}
-          className="border-2 border-black px-2 py-1 text-xs font-press disabled:opacity-40"
+          className="border-2 border-black px-3 py-1 text-sm font-press disabled:opacity-40"
         >
           X
         </button>
       </div>
 
       {query && (
-        <ul className="max-h-[356px] overflow-y-auto">
+        <ul className="max-h-[420px] overflow-y-auto">
           {rows.length === 0 ? (
-            <li className="px-3 py-4 font-pixel text-lg">No matches</li>
+            <li className="px-4 py-4 font-pixel text-xl">No matches</li>
           ) : (
             rows.slice(0, MAX_ROWS).map((pokemon) => (
-              <li key={pokemon.id} className="border-b border-black flex items-center justify-between gap-2 px-2 py-2">
+              <li key={pokemon.id} className="border-b border-black flex items-center justify-between gap-3 px-3 py-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <Image
                     src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.id}.png`}
                     alt={pokemon.name}
-                    width={40}
-                    height={40}
+                    width={56}
+                    height={56}
                     className="pixel-img"
                     unoptimized
                   />
-                  <span className="font-pixel text-lg truncate">{pokemon.name}</span>
+                  <span className="font-pixel text-2xl truncate">{pokemon.name}</span>
                 </div>
                 <button
                   type="button"
@@ -98,7 +98,7 @@ export function PokemonSearchDropdown({
                     onSubmit(pokemon.id);
                     setQuery("");
                   }}
-                  className="font-press text-xs border-2 border-black px-3 py-1 text-white disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed"
+                  className="font-press text-sm border-2 border-black px-3 py-2 text-white disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed"
                   style={{ backgroundColor: primaryColor }}
                 >
                   Select

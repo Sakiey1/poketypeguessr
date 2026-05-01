@@ -59,6 +59,11 @@ export default function GamePage() {
       setScoresByPlayerId(
         Object.fromEntries(payload.players.map((player) => [player.id, player.score])),
       );
+      if (payload.players.every((player) => player.connected)) {
+        setStatusMessage((previous) =>
+          previous?.includes("disconnected") ? null : previous,
+        );
+      }
     };
     const onGameStarted = ({ firstCombo, combo }: { firstCombo?: TypeCombo; combo?: TypeCombo }) => {
       setGameOver(null);
@@ -90,7 +95,8 @@ export default function GamePage() {
       setPlayAgainNeeded(payload.finalScores.length || 2);
       setHasVotedPlayAgain(false);
     };
-    const onOpponentDisconnected = () => setStatusMessage("Waiting for opponent reconnect...");
+    const onPlayerDisconnected = ({ playerName }: { playerName?: string }) =>
+      setStatusMessage(playerName ? `${playerName} disconnected. Waiting for reconnect...` : "A player disconnected.");
     const onError = ({ message }: { message: string }) => setStatusMessage(message);
     const onSkipVoteUpdate = ({ votes, needed }: { votes: number; needed: number }) => {
       if (votes < needed) {
@@ -110,7 +116,7 @@ export default function GamePage() {
     socket.on("new_combo", onNewCombo);
     socket.on("round_result", onRoundResult);
     socket.on("game_over", onGameOver);
-    socket.on("opponent_disconnected", onOpponentDisconnected);
+    socket.on("player_disconnected", onPlayerDisconnected);
     socket.on("error", onError);
     socket.on("skip_vote_update", onSkipVoteUpdate);
     socket.on("play_again_vote_update", onPlayAgainVoteUpdate);
@@ -128,7 +134,7 @@ export default function GamePage() {
       socket.off("new_combo", onNewCombo);
       socket.off("round_result", onRoundResult);
       socket.off("game_over", onGameOver);
-      socket.off("opponent_disconnected", onOpponentDisconnected);
+      socket.off("player_disconnected", onPlayerDisconnected);
       socket.off("error", onError);
       socket.off("skip_vote_update", onSkipVoteUpdate);
       socket.off("play_again_vote_update", onPlayAgainVoteUpdate);
@@ -153,7 +159,9 @@ export default function GamePage() {
     roomState?.players.find((player) => player.id === selfId) ??
     roomState?.players.find((player) => player.name === playerName) ??
     null;
-  const opponent = roomState?.players.find((player) => player.id !== me?.id) ?? null;
+  const orderedPlayers = [...(roomState?.players ?? [])]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => (a.id === me?.id ? -1 : b.id === me?.id ? 1 : 0));
   const data = pokemonData as unknown as PokemonEntry[];
 
   useEffect(() => {
@@ -165,7 +173,7 @@ export default function GamePage() {
     }
   }, [roomCode, roomState, router]);
 
-  if (!socket || !roomState || !currentCombo || !me || !opponent) {
+  if (!socket || !roomState || !currentCombo || !me) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[#f7f4e7] font-pixel text-2xl">
         Loading battle...
@@ -179,23 +187,21 @@ export default function GamePage() {
       : roomState.players.find((player) => player.id === roundResult?.winnerId)?.name;
 
   return (
-    <main className="min-h-screen bg-[#f7f4e7] p-4">
-      <div className="mx-auto max-w-6xl space-y-4">
-        <div className="grid gap-3 md:grid-cols-2">
-          <ScoreBar
-            label={me.name}
-            score={scoresByPlayerId[me.id] ?? me.score}
-            targetScore={roomState.settings.targetScore}
-            highlighted
-          />
-          <ScoreBar
-            label={opponent.name}
-            score={scoresByPlayerId[opponent.id] ?? opponent.score}
-            targetScore={roomState.settings.targetScore}
-          />
+    <main className="min-h-screen bg-[#f7f4e7] p-6 md:p-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+          {orderedPlayers.map((player) => (
+            <ScoreBar
+              key={player.id}
+              label={`${player.name}${player.id === me.id ? " (you)" : ""}${!player.connected ? " - reconnecting..." : ""}`}
+              score={scoresByPlayerId[player.id] ?? player.score}
+              targetScore={roomState.settings.targetScore}
+              highlighted={player.id === me.id}
+            />
+          ))}
         </div>
 
-        <section className="border-4 border-black bg-white p-6 flex flex-col items-center gap-4">
+        <section className="border-4 border-black bg-white p-7 flex flex-col items-center gap-5">
           <h2 className="font-press text-lg">Find This Dual Type</h2>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <TypeBadge type={currentCombo[0]} large />
@@ -203,29 +209,22 @@ export default function GamePage() {
           </div>
         </section>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <section className="space-y-2">
-            <h3 className="font-press text-xs uppercase">{me.name} (you)</h3>
-            <PokemonSearchDropdown
-              allPokemon={data}
-              combo={currentCombo}
-              onSubmit={(pokemonId) => socket.emit("submit_answer", { roomCode, pokemonId })}
-              disabled={Boolean(roundResult) || Boolean(gameOver)}
-            />
-          </section>
-          <section className="space-y-2">
-            <h3 className="font-press text-xs uppercase">{opponent.name}</h3>
-            <PokemonSearchDropdown
-              allPokemon={data}
-              combo={currentCombo}
-              onSubmit={() => undefined}
-              disabled
-            />
-          </section>
-        </div>
+        <section className="space-y-3">
+          <h3 className="font-press text-sm uppercase">{me.name} (you)</h3>
+          <PokemonSearchDropdown
+            allPokemon={data}
+            combo={currentCombo}
+            onSubmit={(pokemonId) => socket.emit("submit_answer", { roomCode, pokemonId })}
+            disabled={Boolean(roundResult) || Boolean(gameOver)}
+          />
+        </section>
 
         <div className="flex justify-center">
-          <PixelButton onClick={() => socket.emit("skip_round", { roomCode })} disabled={Boolean(roundResult)}>
+          <PixelButton
+            onClick={() => socket.emit("skip_round", { roomCode })}
+            disabled={Boolean(roundResult)}
+            className="text-lg md:text-xl py-3 px-6"
+          >
             Skip / Both Stuck
           </PixelButton>
         </div>

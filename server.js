@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
   generations: [1, 2, 3, 4, 5, 6, 7, 8, 9],
   includeAltForms: true,
 };
+const MAX_PLAYERS_PER_ROOM = 4;
 
 /** @type {Map<string, any>} */
 const rooms = new Map();
@@ -77,6 +78,14 @@ const resetRoundState = (room) => {
 
 const resetPlayAgainState = (room) => {
   room.game.playAgainVotes = new Set();
+};
+
+const replaceSocketVoteId = (voteSet, oldId, newId) => {
+  if (!voteSet.has(oldId)) {
+    return;
+  }
+  voteSet.delete(oldId);
+  voteSet.add(newId);
 };
 
 const pickCombo = (room) => {
@@ -175,6 +184,8 @@ const removePlayerFromRoom = (io, room, socketId) => {
     return;
   }
 
+  room.game.skipVotes.delete(socketId);
+  room.game.playAgainVotes.delete(socketId);
   room.players.splice(index, 1);
   if (room.players.length === 0) {
     rooms.delete(room.code);
@@ -218,8 +229,10 @@ app.prepare().then(() => {
     });
 
     socket.on("join_room", ({ roomCode, playerName }, callback) => {
-      const room = rooms.get((roomCode || "").toUpperCase());
+      const code = (roomCode || "").toUpperCase();
+      const room = rooms.get(code);
       if (!room) {
+        console.log(`[join_room] reject: room ${code} not found (socket=${socket.id})`);
         callback({ ok: false, error: "Invalid room code" });
         return;
       }
@@ -233,32 +246,42 @@ app.prepare().then(() => {
         return;
       }
 
-      const reconnecting = room.players.find(
-        (player) => !player.connected && player.name.toLowerCase() === playerName.toLowerCase(),
+      const normalizedName = (playerName || "").toLowerCase();
+      const existingByName = room.players.find(
+        (player) => player.name.toLowerCase() === normalizedName,
       );
-      if (reconnecting) {
-        reconnecting.id = socket.id;
-        reconnecting.connected = true;
-        socket.join(room.code);
-        if (room.hostId === reconnecting.oldSocketId) {
+      if (existingByName) {
+        const oldSocket = io.sockets.sockets.get(existingByName.id);
+        const oldSocketAlive = Boolean(oldSocket && oldSocket.connected);
+        if (oldSocketAlive) {
+          console.log(
+            `[join_room] reject: name ${existingByName.name} taken by live socket ${existingByName.id} in ${room.code}`,
+          );
+          callback({ ok: false, error: "That player name is already in this room." });
+          return;
+        }
+        const oldSocketId = existingByName.id;
+        existingByName.id = socket.id;
+        existingByName.connected = true;
+        delete existingByName.oldSocketId;
+        replaceSocketVoteId(room.game.skipVotes, oldSocketId, socket.id);
+        replaceSocketVoteId(room.game.playAgainVotes, oldSocketId, socket.id);
+        if (room.hostId === oldSocketId) {
           room.hostId = socket.id;
         }
+        socket.join(room.code);
         emitRoomState(io, room);
         emitCurrentCombo(socket, room);
+        console.log(
+          `[join_room] reclaim ${existingByName.name} in ${room.code} (old=${oldSocketId} -> new=${socket.id})`,
+        );
         callback({ ok: true });
         return;
       }
 
-      const existingByName = room.players.find(
-        (player) => player.connected && player.name.toLowerCase() === playerName.toLowerCase(),
-      );
-      if (existingByName) {
-        callback({ ok: false, error: "That player name is already in this room." });
-        return;
-      }
-
-      if (room.players.length >= 2) {
-        callback({ ok: false, error: "Room is full" });
+      if (room.players.length >= MAX_PLAYERS_PER_ROOM) {
+        console.log(`[join_room] reject: room ${room.code} full (socket=${socket.id})`);
+        callback({ ok: false, error: `Room is full (${MAX_PLAYERS_PER_ROOM} players max)` });
         return;
       }
 
@@ -266,6 +289,7 @@ app.prepare().then(() => {
       socket.join(room.code);
       emitRoomState(io, room);
       emitCurrentCombo(socket, room);
+      console.log(`[join_room] add ${playerName} to ${room.code} (socket=${socket.id})`);
       callback({ ok: true });
     });
 
@@ -313,7 +337,7 @@ app.prepare().then(() => {
         return;
       }
       if (room.players.length < 2) {
-        socket.emit("error", { message: "Need two players to start." });
+        socket.emit("error", { message: "Need at least two players to start." });
         return;
       }
       if (room.settings.generations.length === 0) {
@@ -444,7 +468,7 @@ app.prepare().then(() => {
 
         player.connected = false;
         player.oldSocketId = socket.id;
-        io.to(room.code).emit("opponent_disconnected");
+        io.to(room.code).emit("player_disconnected", { playerName: player.name });
         emitRoomState(io, room);
 
         setTimeout(() => {

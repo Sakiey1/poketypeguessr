@@ -63,14 +63,19 @@ export default function LobbyPage() {
     if (!socket || !roomCode || !playerName) {
       return;
     }
+    if (!socket.connected) {
+      return;
+    }
     if (selfId && state?.players.some((player) => player.id === selfId)) {
       return;
     }
+    console.log(`[lobby] emitting join_room (room=${roomCode}, name=${playerName}, selfId=${selfId})`);
     socket.emit(
       "join_room",
       { roomCode, playerName },
       ({ ok, error: joinError }: { ok: boolean; error?: string }) => {
         if (!ok) {
+          console.warn(`[lobby] join_room rejected: ${joinError}`);
           setError(joinError ?? "Could not join room.");
         }
       },
@@ -79,8 +84,29 @@ export default function LobbyPage() {
 
   if (!state) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[#f7f4e7] font-pixel text-2xl">
-        Connecting...
+      <main className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#f7f4e7] p-6 md:p-8 font-pixel text-2xl">
+        {error ? (
+          <>
+            <p className="text-[#c03028] text-center">{error}</p>
+            <div className="flex gap-3">
+              <PixelButton variant="secondary" onClick={() => router.push(`/join/${roomCode}`)}>
+                Try Again
+              </PixelButton>
+              <PixelButton variant="danger" onClick={() => router.push("/")}>
+                Home
+              </PixelButton>
+            </div>
+          </>
+        ) : !playerName ? (
+          <>
+            <p className="text-center">No player name set.</p>
+            <PixelButton variant="secondary" onClick={() => router.push(`/join/${roomCode}`)}>
+              Set Name
+            </PixelButton>
+          </>
+        ) : (
+          <p>Connecting...</p>
+        )}
       </main>
     );
   }
@@ -124,10 +150,10 @@ export default function LobbyPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f7f4e7] p-6">
-      <div className="mx-auto max-w-4xl border-4 border-black bg-white p-6 space-y-6">
-        <h1 className="font-press text-2xl text-center">Lobby</h1>
-        <div className="font-press text-sm text-center">
+    <main className="min-h-screen bg-[#f7f4e7] p-6 md:p-8">
+      <div className="mx-auto max-w-4xl border-4 border-black bg-white p-6 md:p-7 space-y-6">
+        <h1 className="font-press text-2xl md:text-3xl text-center">Lobby</h1>
+        <div className="font-press text-sm md:text-base text-center">
           Room Code: <span className="tracking-[0.3em]">{roomCode}</span>
         </div>
         <div className="flex items-center justify-center gap-3">
@@ -137,21 +163,24 @@ export default function LobbyPage() {
           {copyStatus && <span className="font-pixel text-xl">{copyStatus}</span>}
         </div>
 
-        <div className="grid gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {state.players.map((player) => (
-            <div key={player.id} className="border-2 border-black p-3 font-pixel text-xl">
+            <div key={player.id} className="border-2 border-black p-3 font-pixel text-xl bg-[#f7f4e7]">
               {player.name} {player.id === state.hostId ? "(Host)" : ""}
               {!player.connected ? " - reconnecting..." : ""}
             </div>
           ))}
         </div>
+        <p className="font-pixel text-lg">
+          Players: {state.players.length}/4 (minimum 2 to start)
+        </p>
 
         <section className="border-4 border-black p-4 bg-[#f7f4e7] space-y-4">
-          <h2 className="font-press text-xs">Game Settings</h2>
+          <h2 className="font-press text-xs md:text-sm">Game Settings</h2>
           <label className="flex items-center gap-3 font-pixel text-xl">
             Target Score
             <select
-              className="border-2 border-black bg-white px-2 py-1"
+              className="border-2 border-black bg-white px-2 py-1 text-lg"
               value={shouldShowCustomTarget ? "custom" : String(state.settings.targetScore)}
               disabled={!state.isHost}
               onChange={(event) => {
@@ -198,7 +227,7 @@ export default function LobbyPage() {
                     submitCustomTarget();
                   }
                 }}
-                className="w-24 border-2 border-black bg-white px-2 py-1"
+                className="w-24 border-2 border-black bg-white px-2 py-1 text-lg"
               />
             </div>
           )}
