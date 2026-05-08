@@ -212,6 +212,7 @@ export default function GamePage() {
         <section className="space-y-3">
           <h3 className="font-press text-sm uppercase">{me.name} (you)</h3>
           <PokemonSearchDropdown
+            key={`${currentCombo[0]}-${currentCombo[1]}`}
             allPokemon={data}
             combo={currentCombo}
             onSubmit={(pokemonId) => socket.emit("submit_answer", { roomCode, pokemonId })}

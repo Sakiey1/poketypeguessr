@@ -22,6 +22,7 @@ export function PokemonSearchDropdown({
   onSubmit,
 }: PokemonSearchDropdownProps) {
   const [query, setQuery] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const primaryColor = TYPE_COLORS[combo[0]];
 
   const rows = useMemo(() => {
@@ -34,16 +35,21 @@ export function PokemonSearchDropdown({
       .filter((pokemon) => pokemon.name.toLowerCase().includes(normalizedQuery))
       .slice(0, 200);
   }, [allPokemon, query]);
+  const visibleRows = rows.slice(0, MAX_ROWS);
 
-  const clearInput = () => setQuery("");
+  const clearInput = () => {
+    setQuery("");
+    setHighlightedIndex(0);
+  };
 
-  const submitTopMatch = () => {
-    const topMatch = rows[0];
-    if (!topMatch || disabled) {
+  const submitHighlightedMatch = () => {
+    const highlightedMatch = visibleRows[highlightedIndex] ?? visibleRows[0];
+    if (!highlightedMatch || disabled) {
       return;
     }
-    onSubmit(topMatch.id);
+    onSubmit(highlightedMatch.id);
     setQuery("");
+    setHighlightedIndex(0);
   };
 
   return (
@@ -51,12 +57,39 @@ export function PokemonSearchDropdown({
       <div className="flex items-center border-b-4 border-black px-4 py-3 gap-3">
         <span className="text-2xl">🔍</span>
         <input
+          autoFocus
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setHighlightedIndex(0);
+          }}
           onKeyDown={(event) => {
+            if (event.key === "ArrowDown" && visibleRows.length > 0) {
+              event.preventDefault();
+              setHighlightedIndex((previous) => (previous + 1) % visibleRows.length);
+              return;
+            }
+
+            if (event.key === "ArrowUp" && visibleRows.length > 0) {
+              event.preventDefault();
+              setHighlightedIndex((previous) => (previous - 1 + visibleRows.length) % visibleRows.length);
+              return;
+            }
+
+            if (event.key === "Tab" && visibleRows.length > 0) {
+              event.preventDefault();
+              setHighlightedIndex((previous) => {
+                if (event.shiftKey) {
+                  return (previous - 1 + visibleRows.length) % visibleRows.length;
+                }
+                return (previous + 1) % visibleRows.length;
+              });
+              return;
+            }
+
             if (event.key === "Enter") {
               event.preventDefault();
-              submitTopMatch();
+              submitHighlightedMatch();
             }
           }}
           disabled={disabled}
@@ -67,6 +100,7 @@ export function PokemonSearchDropdown({
           type="button"
           onClick={clearInput}
           disabled={!query}
+          tabIndex={-1}
           className="border-2 border-black px-3 py-1 text-sm font-press disabled:opacity-40"
         >
           X
@@ -78,8 +112,13 @@ export function PokemonSearchDropdown({
           {rows.length === 0 ? (
             <li className="px-4 py-4 font-pixel text-xl">No matches</li>
           ) : (
-            rows.slice(0, MAX_ROWS).map((pokemon) => (
-              <li key={pokemon.id} className="border-b border-black flex items-center justify-between gap-3 px-3 py-3">
+            visibleRows.map((pokemon, index) => (
+              <li
+                key={pokemon.id}
+                className={`border-b border-black flex items-center justify-between gap-3 px-3 py-3 ${
+                  index === highlightedIndex ? "bg-yellow-200" : ""
+                }`}
+              >
                 <div className="flex items-center gap-3 min-w-0">
                   <Image
                     src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.id}.png`}
@@ -94,9 +133,11 @@ export function PokemonSearchDropdown({
                 <button
                   type="button"
                   disabled={disabled}
+                  tabIndex={-1}
                   onClick={() => {
                     onSubmit(pokemon.id);
                     setQuery("");
+                    setHighlightedIndex(0);
                   }}
                   className="font-press text-sm border-2 border-black px-3 py-2 text-white disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed"
                   style={{ backgroundColor: primaryColor }}
