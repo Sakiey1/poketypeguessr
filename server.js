@@ -3,6 +3,12 @@ const { createServer } = require("http");
 const next = require("next");
 const { Server } = require("socket.io");
 const pokemonData = require("./data/pokemon.json");
+const {
+  ALL_CATEGORIES,
+  generateConstraint,
+  validateAgainstConstraint,
+  renderConstraintForClient,
+} = require("./lib/constraints");
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
@@ -14,6 +20,7 @@ const DEFAULT_SETTINGS = {
   targetScore: 10,
   generations: [1, 2, 3, 4, 5, 6, 7, 8, 9],
   includeAltForms: true,
+  enabledConstraints: [...ALL_CATEGORIES],
 };
 const MAX_PLAYERS_PER_ROOM = 4;
 
@@ -100,17 +107,33 @@ const pickCombo = (room) => {
   const source = available.length > 0 ? available : room.game.comboPool;
   const combo = source[Math.floor(Math.random() * source.length)];
   room.game.usedCombos.add(normalizeCombo(combo));
-  room.game.currentCombo = combo;
   room.game.comboNumber += 1;
   room.game.roundOpen = true;
+
+  const pool = getDualTypePool(room);
+  const constraint = generateConstraint({
+    combo,
+    pool,
+    enabledCategories: room.settings.enabledConstraints ?? [],
+    generations: room.settings.generations,
+    lastCategory: room.game.lastCategory ?? null,
+  });
+  if (constraint) {
+    room.game.lastCategory = constraint.category;
+  }
+
+  room.game.currentCombo = combo;
+  room.game.currentConstraint = constraint;
   resetRoundState(room);
-  return combo;
+  return { combo, constraint };
 };
 
 const emitNewCombo = (io, room, isFirst = false) => {
-  const combo = pickCombo(room);
+  const { combo, constraint } = pickCombo(room);
+  const constraintPayload = renderConstraintForClient(constraint);
   io.to(room.code).emit(isFirst ? "game_started" : "new_combo", {
     combo,
+    constraint: constraintPayload,
     comboNumber: room.game.comboNumber,
     firstCombo: combo,
   });
@@ -118,15 +141,25 @@ const emitNewCombo = (io, room, isFirst = false) => {
 
 const emitCurrentCombo = (socket, room) => {
   if (room.game.started && room.game.currentCombo) {
-    socket.emit("new_combo", { combo: room.game.currentCombo, comboNumber: room.game.comboNumber });
+    socket.emit("new_combo", {
+      combo: room.game.currentCombo,
+      constraint: renderConstraintForClient(room.game.currentConstraint),
+      comboNumber: room.game.comboNumber,
+    });
   }
 };
 
-const getRoundExample = (room) =>
-  getDualTypePool(room).find(
-    (pokemon) =>
-      normalizeCombo([pokemon.types[0], pokemon.types[1]]) === normalizeCombo(room.game.currentCombo),
+const getRoundExample = (room) => {
+  const pool = getDualTypePool(room);
+  const matchesCombo = (pokemon) =>
+    normalizeCombo([pokemon.types[0], pokemon.types[1]]) === normalizeCombo(room.game.currentCombo);
+  return (
+    pool.find(
+      (pokemon) =>
+        matchesCombo(pokemon) && validateAgainstConstraint(pokemon, room.game.currentConstraint),
+    ) ?? pool.find(matchesCombo)
   );
+};
 
 const processRoundResult = (io, room, winnerId, pokemon) => {
   room.game.roundOpen = false;
@@ -165,17 +198,23 @@ const processRoundResult = (io, room, winnerId, pokemon) => {
 
 const validateSubmission = (room, pokemon) => {
   if (!pokemon || pokemon.types.length !== 2) {
-    return false;
+    return { ok: false, reason: "wrong_type" };
   }
   if (!room.settings.generations.includes(pokemon.generation)) {
-    return false;
+    return { ok: false, reason: "generation_disabled" };
   }
   if (!room.settings.includeAltForms && pokemon.isAltForm) {
-    return false;
+    return { ok: false, reason: "alt_form_disabled" };
   }
-  return (
-    normalizeCombo([pokemon.types[0], pokemon.types[1]]) === normalizeCombo(room.game.currentCombo)
-  );
+  if (
+    normalizeCombo([pokemon.types[0], pokemon.types[1]]) !== normalizeCombo(room.game.currentCombo)
+  ) {
+    return { ok: false, reason: "wrong_type" };
+  }
+  if (!validateAgainstConstraint(pokemon, room.game.currentConstraint)) {
+    return { ok: false, reason: "constraint_failed" };
+  }
+  return { ok: true };
 };
 
 const removePlayerFromRoom = (io, room, socketId) => {
@@ -209,11 +248,16 @@ app.prepare().then(() => {
       const room = {
         code: roomCode,
         hostId: socket.id,
-        settings: { ...DEFAULT_SETTINGS },
+        settings: {
+          ...DEFAULT_SETTINGS,
+          enabledConstraints: [...DEFAULT_SETTINGS.enabledConstraints],
+        },
         players: [{ id: socket.id, name: playerName, score: 0, connected: true }],
         game: {
           started: false,
           currentCombo: null,
+          currentConstraint: null,
+          lastCategory: null,
           comboPool: [],
           usedCombos: new Set(),
           comboNumber: 0,
@@ -305,28 +349,36 @@ app.prepare().then(() => {
       emitCurrentCombo(socket, room);
     });
 
-    socket.on("update_settings", ({ roomCode, targetScore, generations, includeAltForms }) => {
-      const room = rooms.get((roomCode || "").toUpperCase());
-      if (!room || room.hostId !== socket.id) {
-        return;
-      }
-      const parsedTargetScore = Number(targetScore);
-      if (!Number.isInteger(parsedTargetScore) || parsedTargetScore < 1 || parsedTargetScore > 20) {
-        socket.emit("error", { message: "Target score must be an integer from 1 to 20." });
-        return;
-      }
-      if (!Array.isArray(generations) || generations.length === 0) {
-        socket.emit("error", { message: "Pick at least one generation." });
-        return;
-      }
+    socket.on(
+      "update_settings",
+      ({ roomCode, targetScore, generations, includeAltForms, enabledConstraints }) => {
+        const room = rooms.get((roomCode || "").toUpperCase());
+        if (!room || room.hostId !== socket.id) {
+          return;
+        }
+        const parsedTargetScore = Number(targetScore);
+        if (!Number.isInteger(parsedTargetScore) || parsedTargetScore < 1 || parsedTargetScore > 20) {
+          socket.emit("error", { message: "Target score must be an integer from 1 to 20." });
+          return;
+        }
+        if (!Array.isArray(generations) || generations.length === 0) {
+          socket.emit("error", { message: "Pick at least one generation." });
+          return;
+        }
 
-      room.settings = {
-        targetScore: parsedTargetScore,
-        generations: generations.sort((a, b) => a - b),
-        includeAltForms: Boolean(includeAltForms),
-      };
-      emitRoomState(io, room);
-    });
+        const sanitizedConstraints = Array.isArray(enabledConstraints)
+          ? enabledConstraints.filter((category) => ALL_CATEGORIES.includes(category))
+          : room.settings.enabledConstraints ?? [];
+
+        room.settings = {
+          targetScore: parsedTargetScore,
+          generations: generations.sort((a, b) => a - b),
+          includeAltForms: Boolean(includeAltForms),
+          enabledConstraints: sanitizedConstraints,
+        };
+        emitRoomState(io, room);
+      },
+    );
 
     socket.on("start_game", ({ roomCode }) => {
       const room = rooms.get((roomCode || "").toUpperCase());
@@ -357,6 +409,8 @@ app.prepare().then(() => {
       room.game.usedCombos = new Set();
       room.game.comboNumber = 0;
       room.game.started = true;
+      room.game.lastCategory = null;
+      room.game.currentConstraint = null;
       resetRoundState(room);
       resetPlayAgainState(room);
       emitRoomState(io, room);
@@ -374,9 +428,15 @@ app.prepare().then(() => {
       }
 
       const pokemon = pokemonById.get(Number(pokemonId));
-      const valid = validateSubmission(room, pokemon);
-      if (!valid) {
-        socket.emit("error", { message: "That Pokemon does not match this combo." });
+      const result = validateSubmission(room, pokemon);
+      if (!result.ok) {
+        const messages = {
+          wrong_type: "That Pokemon does not match this combo.",
+          generation_disabled: "That Pokemon is from a disabled generation.",
+          alt_form_disabled: "Alternate forms are disabled this game.",
+          constraint_failed: "Doesn't satisfy this round's constraint.",
+        };
+        socket.emit("error", { message: messages[result.reason] ?? "Invalid pick." });
         return;
       }
 
@@ -444,6 +504,8 @@ app.prepare().then(() => {
       room.game.usedCombos = new Set();
       room.game.comboNumber = 0;
       room.game.started = true;
+      room.game.lastCategory = null;
+      room.game.currentConstraint = null;
       resetRoundState(room);
       resetPlayAgainState(room);
       emitRoomState(io, room);

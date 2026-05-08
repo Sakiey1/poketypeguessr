@@ -10,7 +10,12 @@ import { ScoreBar } from "@/components/ScoreBar";
 import { SpeechBox } from "@/components/SpeechBox";
 import { TypeBadge } from "@/components/TypeBadge";
 import pokemonData from "@/data/pokemon.json";
-import type { PokemonEntry, RoomStatePayload, TypeCombo } from "@/lib/types";
+import type {
+  ConstraintPayload,
+  PokemonEntry,
+  RoomStatePayload,
+  TypeCombo,
+} from "@/lib/types";
 import { useSocket } from "@/lib/use-socket";
 
 type RoundResultPayload = {
@@ -18,6 +23,12 @@ type RoundResultPayload = {
   pokemonId: number | null;
   pokemonName: string | null;
   scores: { id: string; score: number }[];
+};
+
+const DIFFICULTY_COLOR: Record<ConstraintPayload["difficulty"], string> = {
+  easy: "#9bbc0f",
+  medium: "#F8D030",
+  hard: "#c03028",
 };
 
 export default function GamePage() {
@@ -28,6 +39,7 @@ export default function GamePage() {
   const [roomState, setRoomState] = useState<RoomStatePayload | null>(null);
   const [selfId, setSelfId] = useState("");
   const [currentCombo, setCurrentCombo] = useState<TypeCombo | null>(null);
+  const [currentConstraint, setCurrentConstraint] = useState<ConstraintPayload | null>(null);
   const [roundResult, setRoundResult] = useState<RoundResultPayload | null>(null);
   const [gameOver, setGameOver] = useState<{
     winnerId: string;
@@ -65,17 +77,33 @@ export default function GamePage() {
         );
       }
     };
-    const onGameStarted = ({ firstCombo, combo }: { firstCombo?: TypeCombo; combo?: TypeCombo }) => {
+    const onGameStarted = ({
+      firstCombo,
+      combo,
+      constraint,
+    }: {
+      firstCombo?: TypeCombo;
+      combo?: TypeCombo;
+      constraint?: ConstraintPayload | null;
+    }) => {
       setGameOver(null);
       setRoundResult(null);
       setCurrentCombo(firstCombo ?? combo ?? null);
+      setCurrentConstraint(constraint ?? null);
       setPlayAgainVotes(0);
       setPlayAgainNeeded(2);
       setHasVotedPlayAgain(false);
     };
-    const onNewCombo = ({ combo }: { combo: TypeCombo }) => {
+    const onNewCombo = ({
+      combo,
+      constraint,
+    }: {
+      combo: TypeCombo;
+      constraint?: ConstraintPayload | null;
+    }) => {
       setRoundResult(null);
       setCurrentCombo(combo);
+      setCurrentConstraint(constraint ?? null);
       setStatusMessage(null);
     };
     const onRoundResult = (payload: RoundResultPayload) => {
@@ -207,6 +235,20 @@ export default function GamePage() {
             <TypeBadge type={currentCombo[0]} large />
             <TypeBadge type={currentCombo[1]} large />
           </div>
+          {currentConstraint && (
+            <div
+              className="border-4 border-black bg-[#f7f4e7] px-4 py-3 max-w-2xl w-full flex flex-col items-center gap-2"
+              style={{ boxShadow: `4px 4px 0 0 ${DIFFICULTY_COLOR[currentConstraint.difficulty]}` }}
+            >
+              <span
+                className="font-press text-[10px] uppercase"
+                style={{ color: DIFFICULTY_COLOR[currentConstraint.difficulty] }}
+              >
+                Constraint · {currentConstraint.difficulty}
+              </span>
+              <p className="font-pixel text-2xl text-center">{currentConstraint.text}</p>
+            </div>
+          )}
         </section>
 
         <section className="space-y-3">

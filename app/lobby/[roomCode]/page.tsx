@@ -4,10 +4,29 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { PixelButton } from "@/components/PixelButton";
-import type { LobbySettings, RoomStatePayload } from "@/lib/types";
+import { CONSTRAINT_CATEGORIES } from "@/lib/types";
+import type { ConstraintCategory, LobbySettings, RoomStatePayload } from "@/lib/types";
 import { useSocket } from "@/lib/use-socket";
 
 const SCORE_OPTIONS = [5, 10, 15, 20];
+
+const CONSTRAINT_LABEL: Record<ConstraintCategory, string> = {
+  REGION: "Region lock",
+  EVOLUTION: "Evolution position",
+  MOVE: "Move learnset",
+  STAT: "Stat / BST",
+  CATEGORY: "Category (starters, fossils, etc.)",
+  COMBINED: "Combined (harder rounds)",
+};
+
+const CONSTRAINT_DESCRIPTION: Record<ConstraintCategory, string> = {
+  REGION: 'e.g., "Kanto only" or "Anything except Hoenn"',
+  EVOLUTION: 'e.g., "First stage only" or "Final stage only"',
+  MOVE: 'e.g., "Can learn Earthquake" or "Cannot learn Ice moves"',
+  STAT: 'e.g., "BST under 450" or "Highest stat is Speed"',
+  CATEGORY: 'e.g., "Starters only" or "No legendaries"',
+  COMBINED: "Two constraints stacked together for hard rounds",
+};
 
 export default function LobbyPage() {
   const params = useParams<{ roomCode: string }>();
@@ -20,6 +39,7 @@ export default function LobbyPage() {
   const [showCustomTarget, setShowCustomTarget] = useState(false);
   const [customTargetInput, setCustomTargetInput] = useState("10");
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const playerName = useMemo(
     () => (typeof window === "undefined" ? "" : (window.localStorage.getItem("poketypeguessr:name") ?? "")),
     [],
@@ -112,6 +132,9 @@ export default function LobbyPage() {
   }
 
   const selectedGens = new Set(state.settings.generations);
+  const enabledConstraints = new Set<ConstraintCategory>(
+    state.settings.enabledConstraints ?? [],
+  );
   const canStart = state.isHost && state.players.length >= 2 && state.settings.generations.length > 0;
   const isPresetTarget = SCORE_OPTIONS.includes(state.settings.targetScore);
   const shouldShowCustomTarget = showCustomTarget || !isPresetTarget;
@@ -149,6 +172,22 @@ export default function LobbyPage() {
     }
   };
 
+  const settingsSummary = (() => {
+    const constraintCount = enabledConstraints.size;
+    const constraintBlurb =
+      constraintCount === 0
+        ? "Standard rounds only"
+        : constraintCount === CONSTRAINT_CATEGORIES.length
+          ? "All constraint types on"
+          : `${constraintCount} constraint type${constraintCount === 1 ? "" : "s"} on`;
+    return [
+      `First to ${state.settings.targetScore}`,
+      `Gens ${state.settings.generations.join(", ")}`,
+      state.settings.includeAltForms ? "Alt forms on" : "Alt forms off",
+      constraintBlurb,
+    ].join(" · ");
+  })();
+
   return (
     <main className="min-h-screen bg-[#f7f4e7] p-6 md:p-8">
       <div className="mx-auto max-w-4xl border-4 border-black bg-white p-6 md:p-7 space-y-6">
@@ -156,7 +195,7 @@ export default function LobbyPage() {
         <div className="font-press text-sm md:text-base text-center">
           Room Code: <span className="tracking-[0.3em]">{roomCode}</span>
         </div>
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
           <PixelButton variant="secondary" onClick={copyInviteLink}>
             Copy Link
           </PixelButton>
@@ -175,105 +214,21 @@ export default function LobbyPage() {
           Players: {state.players.length}/4 (minimum 2 to start)
         </p>
 
-        <section className="border-4 border-black p-4 bg-[#f7f4e7] space-y-4">
-          <h2 className="font-press text-xs md:text-sm">Game Settings</h2>
-          <label className="flex items-center gap-3 font-pixel text-xl">
-            Target Score
-            <select
-              className="border-2 border-black bg-white px-2 py-1 text-lg"
-              value={shouldShowCustomTarget ? "custom" : String(state.settings.targetScore)}
-              disabled={!state.isHost}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (value === "custom") {
-                  setShowCustomTarget(true);
-                  setCustomTargetInput(String(state.settings.targetScore));
-                  return;
-                }
-                setShowCustomTarget(false);
-                updateSettings({
-                  ...state.settings,
-                  targetScore: Number(value),
-                });
-              }}
-            >
-              {SCORE_OPTIONS.map((score) => (
-                <option key={score} value={String(score)}>
-                  {score}
-                </option>
-              ))}
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          {shouldShowCustomTarget && (
-            <div className="flex items-center gap-2 font-pixel text-xl">
-              <label htmlFor="custom-target-score">Custom (1-20)</label>
-              <input
-                id="custom-target-score"
-                type="number"
-                min={1}
-                max={20}
-                step={1}
-                value={state.isHost ? customTargetInput : String(state.settings.targetScore)}
-                disabled={!state.isHost}
-                onChange={(event) => setCustomTargetInput(event.target.value)}
-                onBlur={() => {
-                  if (state.isHost) {
-                    submitCustomTarget();
-                  }
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && state.isHost) {
-                    submitCustomTarget();
-                  }
-                }}
-                className="w-24 border-2 border-black bg-white px-2 py-1 text-lg"
-              />
+        <section className="border-4 border-black p-4 bg-[#f7f4e7] flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="font-press text-xs md:text-sm">Game Settings</h2>
+              <p className="font-pixel text-lg text-black/70 mt-1">{settingsSummary}</p>
             </div>
-          )}
-
-          <div>
-            <p className="font-pixel text-xl mb-2">Generations</p>
-            <div className="grid grid-cols-3 gap-2">
-              {Array.from({ length: 9 }, (_, index) => index + 1).map((generation) => (
-                <label key={generation} className="flex items-center gap-2 font-pixel text-lg">
-                  <input
-                    type="checkbox"
-                    checked={selectedGens.has(generation)}
-                    disabled={!state.isHost}
-                    onChange={(event) => {
-                      const next = new Set(selectedGens);
-                      if (event.target.checked) {
-                        next.add(generation);
-                      } else {
-                        next.delete(generation);
-                      }
-                      updateSettings({
-                        ...state.settings,
-                        generations: [...next],
-                      });
-                    }}
-                  />
-                  Gen {generation}
-                </label>
-              ))}
-            </div>
+            <PixelButton variant="secondary" onClick={() => setSettingsOpen(true)}>
+              Open Settings
+            </PixelButton>
           </div>
-
-          <label className="flex items-center gap-2 font-pixel text-xl">
-            <input
-              type="checkbox"
-              checked={state.settings.includeAltForms}
-              disabled={!state.isHost}
-              onChange={(event) =>
-                updateSettings({
-                  ...state.settings,
-                  includeAltForms: event.target.checked,
-                })
-              }
-            />
-            Include alternate forms
-          </label>
+          {!state.isHost && (
+            <p className="font-pixel text-base text-black/60">
+              Only the host can change settings.
+            </p>
+          )}
         </section>
 
         {error && <p className="font-pixel text-xl text-[#c03028]">{error}</p>}
@@ -293,6 +248,202 @@ export default function LobbyPage() {
           </PixelButton>
         </div>
       </div>
+
+      {settingsOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-start md:items-center justify-center p-4 overflow-y-auto z-40"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl border-4 border-black bg-white p-5 md:p-6 space-y-5 my-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-press text-base md:text-lg">Game Settings</h2>
+              <PixelButton variant="secondary" onClick={() => setSettingsOpen(false)}>
+                Close
+              </PixelButton>
+            </div>
+
+            <section className="space-y-3">
+              <h3 className="font-press text-xs">Target Score</h3>
+              <label className="flex items-center gap-3 font-pixel text-xl">
+                First to
+                <select
+                  className="border-2 border-black bg-white px-2 py-1 text-lg"
+                  value={shouldShowCustomTarget ? "custom" : String(state.settings.targetScore)}
+                  disabled={!state.isHost}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value === "custom") {
+                      setShowCustomTarget(true);
+                      setCustomTargetInput(String(state.settings.targetScore));
+                      return;
+                    }
+                    setShowCustomTarget(false);
+                    updateSettings({
+                      ...state.settings,
+                      targetScore: Number(value),
+                    });
+                  }}
+                >
+                  {SCORE_OPTIONS.map((score) => (
+                    <option key={score} value={String(score)}>
+                      {score}
+                    </option>
+                  ))}
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              {shouldShowCustomTarget && (
+                <div className="flex items-center gap-2 font-pixel text-xl">
+                  <label htmlFor="custom-target-score">Custom (1-20)</label>
+                  <input
+                    id="custom-target-score"
+                    type="number"
+                    min={1}
+                    max={20}
+                    step={1}
+                    value={state.isHost ? customTargetInput : String(state.settings.targetScore)}
+                    disabled={!state.isHost}
+                    onChange={(event) => setCustomTargetInput(event.target.value)}
+                    onBlur={() => {
+                      if (state.isHost) {
+                        submitCustomTarget();
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && state.isHost) {
+                        submitCustomTarget();
+                      }
+                    }}
+                    className="w-24 border-2 border-black bg-white px-2 py-1 text-lg"
+                  />
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-2">
+              <h3 className="font-press text-xs">Generations</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {Array.from({ length: 9 }, (_, index) => index + 1).map((generation) => (
+                  <label key={generation} className="flex items-center gap-2 font-pixel text-lg">
+                    <input
+                      type="checkbox"
+                      checked={selectedGens.has(generation)}
+                      disabled={!state.isHost}
+                      onChange={(event) => {
+                        const next = new Set(selectedGens);
+                        if (event.target.checked) {
+                          next.add(generation);
+                        } else {
+                          next.delete(generation);
+                        }
+                        updateSettings({
+                          ...state.settings,
+                          generations: [...next],
+                        });
+                      }}
+                    />
+                    Gen {generation}
+                  </label>
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-2">
+              <h3 className="font-press text-xs">Pokemon Pool</h3>
+              <label className="flex items-center gap-2 font-pixel text-xl">
+                <input
+                  type="checkbox"
+                  checked={state.settings.includeAltForms}
+                  disabled={!state.isHost}
+                  onChange={(event) =>
+                    updateSettings({
+                      ...state.settings,
+                      includeAltForms: event.target.checked,
+                    })
+                  }
+                />
+                Include alternate forms
+              </label>
+            </section>
+
+            <section className="space-y-2">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h3 className="font-press text-xs">Round Constraints</h3>
+                {state.isHost && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="border-2 border-black px-2 py-1 font-pixel text-base bg-white hover:bg-black hover:text-white"
+                      onClick={() =>
+                        updateSettings({
+                          ...state.settings,
+                          enabledConstraints: [...CONSTRAINT_CATEGORIES],
+                        })
+                      }
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      className="border-2 border-black px-2 py-1 font-pixel text-base bg-white hover:bg-black hover:text-white"
+                      onClick={() =>
+                        updateSettings({
+                          ...state.settings,
+                          enabledConstraints: [],
+                        })
+                      }
+                    >
+                      None
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="font-pixel text-base text-black/70">
+                Pick which extra rules can show up. With none selected, every round is a
+                plain dual-type prompt.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {CONSTRAINT_CATEGORIES.map((category) => (
+                  <label
+                    key={category}
+                    className="flex items-start gap-2 font-pixel text-lg border-2 border-black bg-white p-2"
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={enabledConstraints.has(category)}
+                      disabled={!state.isHost}
+                      onChange={(event) => {
+                        const next = new Set(enabledConstraints);
+                        if (event.target.checked) {
+                          next.add(category);
+                        } else {
+                          next.delete(category);
+                        }
+                        updateSettings({
+                          ...state.settings,
+                          enabledConstraints: [...next],
+                        });
+                      }}
+                    />
+                    <span>
+                      <span className="font-press text-[10px] block">
+                        {CONSTRAINT_LABEL[category]}
+                      </span>
+                      <span className="text-base text-black/70">
+                        {CONSTRAINT_DESCRIPTION[category]}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
