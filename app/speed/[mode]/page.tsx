@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ConstraintBadge } from "@/components/ConstraintBadge";
@@ -47,6 +47,7 @@ const MODE_TITLE: Record<SpeedMode, string> = {
 export default function SpeedPlayPage() {
   const params = useParams<{ mode: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const modeParam = params.mode ?? "";
 
   if (!isSpeedMode(modeParam)) {
@@ -58,11 +59,12 @@ export default function SpeedPlayPage() {
     );
   }
 
-  return <SpeedRun mode={modeParam} key={modeParam} />;
+  return <SpeedRun mode={modeParam} key={`${modeParam}:${searchParams.toString()}`} />;
 }
 
 function SpeedRun({ mode }: { mode: SpeedMode }) {
   const router = useRouter();
+  const canPause = mode === "endless";
 
   // The picker is created once and never re-created across renders. Stored
   // in a ref because it's a stateful object that must NOT trigger renders
@@ -101,6 +103,7 @@ function SpeedRun({ mode }: { mode: SpeedMode }) {
     limitMs: mode === "timed" ? TIMED_DURATION_MS : undefined,
     getExtraMs: mode === "timed" ? () => timedPenaltyRef.current : undefined,
     onLimit: mode === "timed" ? () => endRunRef.current() : undefined,
+    pauseOnVisibilityHidden: canPause,
   });
 
   const advance = useCallback(() => {
@@ -232,7 +235,8 @@ function SpeedRun({ mode }: { mode: SpeedMode }) {
       }
 
       setTimeout(() => {
-        advance();
+        setInputLocked(false);
+        setFlash(null);
       }, WRONG_FLASH_MS);
     },
     [
@@ -344,7 +348,7 @@ function SpeedRun({ mode }: { mode: SpeedMode }) {
             summary={summary}
             eligible={eligible}
             newBest={newBest}
-            onPlayAgain={() => router.refresh()}
+            onPlayAgain={() => router.push(`/speed/${mode}?run=${Date.now()}`)}
             onChangeMode={() => router.push("/speed")}
             onMainMenu={() => router.push("/")}
           />
@@ -371,13 +375,15 @@ function SpeedRun({ mode }: { mode: SpeedMode }) {
         <header className="flex items-center justify-between gap-3 flex-wrap">
           <h1 className="font-press text-xl md:text-2xl">{MODE_TITLE[mode]}</h1>
           <div className="flex gap-2">
-            <PixelButton
-              variant="secondary"
-              onClick={() => stopwatch.pause()}
-              disabled={!stopwatch.running}
-            >
-              Pause
-            </PixelButton>
+            {canPause && (
+              <PixelButton
+                variant="secondary"
+                onClick={() => stopwatch.pause()}
+                disabled={!stopwatch.running}
+              >
+                Pause
+              </PixelButton>
+            )}
             <PixelButton
               variant="danger"
               onClick={() => {
@@ -434,7 +440,7 @@ function SpeedRun({ mode }: { mode: SpeedMode }) {
           </div>
         </section>
 
-        {stopwatch.paused && (
+        {canPause && stopwatch.paused && (
           <div
             className="fixed inset-0 z-40 flex items-center justify-center bg-black/60"
             onClick={() => stopwatch.resume()}

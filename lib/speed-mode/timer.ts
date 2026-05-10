@@ -38,6 +38,8 @@ export type StopwatchOptions = {
   limitMs?: number;
   getExtraMs?: () => number;
   onLimit?: () => void;
+  // Enable/disable auto-pause on tab blur.
+  pauseOnVisibilityHidden?: boolean;
 };
 
 export const useStopwatch = (options: StopwatchOptions = {}): Stopwatch => {
@@ -169,6 +171,11 @@ export const useStopwatch = (options: StopwatchOptions = {}): Stopwatch => {
   // that reason (so a manual pause stays manual).
   useEffect(() => {
     const onVisibility = () => {
+      const shouldPauseOnBlur =
+        optionsRef.current.pauseOnVisibilityHidden !== false;
+      if (!shouldPauseOnBlur) {
+        return;
+      }
       if (document.visibilityState === "hidden") {
         if (startedAtRef.current !== null) {
           pause("blur");
