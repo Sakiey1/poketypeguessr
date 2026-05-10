@@ -34,6 +34,8 @@ import { normalizeCombo } from "@/lib/pokemon-utils";
 
 type Status = "playing" | "gameover";
 type Flash = "correct" | "wrong" | "skip" | null;
+const CORRECT_FLASH_MS = 180;
+const SKIP_FLASH_MS = 120;
 
 const ALL_POKEMON = pokemonData as unknown as PokemonEntry[];
 const POKEMON_BY_ID = new Map(ALL_POKEMON.map((p) => [p.id, p]));
@@ -113,7 +115,6 @@ function SpeedRun({ mode }: { mode: SpeedMode }) {
     setCombo(next.combo);
     setConstraint(next.constraint);
     setClientConstraint(renderConstraintForClient(next.constraint));
-    setFlash(null);
     setInputLocked(false);
   }, []);
 
@@ -210,6 +211,9 @@ function SpeedRun({ mode }: { mode: SpeedMode }) {
           setLongestStreak(nextStreak);
         }
         setFlash("correct");
+        setTimeout(() => {
+          setFlash(null);
+        }, CORRECT_FLASH_MS);
         if (mode === "race" && nextCorrect >= RACE_TARGET) {
           // Stop immediately so elapsed = moment of target-clearing answer.
           endRun();
@@ -279,6 +283,9 @@ function SpeedRun({ mode }: { mode: SpeedMode }) {
     if (skipDisabled) return;
     setSkipsUsed((value) => value + 1);
     setFlash("skip");
+    setTimeout(() => {
+      setFlash(null);
+    }, SKIP_FLASH_MS);
 
     switch (mode) {
       case "timed": {
