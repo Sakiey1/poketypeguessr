@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { PokemonEntry, TypeCombo } from "@/lib/types";
 import { TYPE_COLORS } from "@/lib/type-colors";
@@ -24,6 +24,15 @@ export function PokemonSearchDropdown({
   const [query, setQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const primaryColor = TYPE_COLORS[combo[0]];
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const focusInput = useCallback(() => {
+    // Defer to next frame so focus is restored after any state-driven disable
+    // / re-enable transitions from guess feedback.
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, []);
 
   const rows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -40,6 +49,7 @@ export function PokemonSearchDropdown({
   const clearInput = () => {
     setQuery("");
     setHighlightedIndex(0);
+    focusInput();
   };
 
   const submitHighlightedMatch = () => {
@@ -50,13 +60,21 @@ export function PokemonSearchDropdown({
     onSubmit(highlightedMatch.id);
     setQuery("");
     setHighlightedIndex(0);
+    focusInput();
   };
+
+  useEffect(() => {
+    if (!disabled) {
+      focusInput();
+    }
+  }, [disabled, focusInput]);
 
   return (
     <div className="w-full max-w-2xl border-4 border-black bg-[#f7f4e7]">
       <div className="flex items-center border-b-4 border-black px-4 py-3 gap-3">
         <span className="text-2xl">🔍</span>
         <input
+          ref={inputRef}
           autoFocus
           value={query}
           onChange={(event) => {
@@ -138,6 +156,7 @@ export function PokemonSearchDropdown({
                     onSubmit(pokemon.id);
                     setQuery("");
                     setHighlightedIndex(0);
+                    focusInput();
                   }}
                   className="font-press text-sm border-2 border-black px-3 py-2 text-white disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed"
                   style={{ backgroundColor: primaryColor }}
