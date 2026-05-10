@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { AuthControls } from "@/components/AuthControls";
 import { PixelButton } from "@/components/PixelButton";
 import { useSocket } from "@/lib/use-socket";
 
@@ -62,10 +63,26 @@ export default function HomePage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f7f4e7] p-8 md:p-10">
-      <div className="w-full max-w-3xl border-4 border-black bg-white p-8 md:p-10 space-y-8">
-        <h1 className="font-press text-3xl md:text-4xl text-center">PoketypeGuessr</h1>
-        <p className="font-pixel text-2xl md:text-3xl text-center">Race your rival to match the dual type!</p>
+    <main className="relative flex min-h-screen items-center justify-center bg-[#f7f4e7] p-6 md:p-10">
+      <div className="absolute right-4 top-4 md:right-6 md:top-6">
+        <AuthControls />
+      </div>
+
+      <div className="w-full max-w-3xl border-4 border-black bg-white p-6 md:p-10 space-y-7">
+        <div className="space-y-2">
+          <h1 className="font-press text-3xl md:text-4xl text-center">PoketypeGuessr</h1>
+          <p className="font-pixel text-2xl md:text-3xl text-center">
+            Race your rival to match the dual type!
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="h-[3px] flex-1 bg-black/30" />
+          <span className="font-press text-[10px] uppercase tracking-wide text-black/60">
+            multiplayer
+          </span>
+          <span className="h-[3px] flex-1 bg-black/30" />
+        </div>
 
         <label className="block">
           <span className="font-press text-sm md:text-base uppercase">Player Name</span>
@@ -99,6 +116,27 @@ export default function HomePage() {
             </PixelButton>
           </div>
         </div>
+
+        <div className="flex items-center gap-3">
+          <span className="h-[3px] flex-1 bg-black/30" />
+          <span className="font-press text-[10px] uppercase tracking-wide text-black/60">
+            single player
+          </span>
+          <span className="h-[3px] flex-1 bg-black/30" />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => router.push("/speed")}
+          className="w-full border-4 border-black bg-[#9bbc0f] px-5 py-4 md:py-5 flex items-center justify-between gap-4 transition-all hover:bg-black hover:text-[#9bbc0f] active:translate-x-[1px] active:translate-y-[1px]"
+          style={{ boxShadow: "6px 6px 0 0 #1a1a1a" }}
+        >
+          <span className="flex-1 text-left">
+            <span className="block font-press text-lg md:text-xl uppercase tracking-wide">
+              Single Player
+            </span>
+          </span>
+        </button>
 
         {error && <p className="font-pixel text-2xl text-[#c03028]">{error}</p>}
       </div>

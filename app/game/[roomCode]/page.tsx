@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { ConstraintBadge } from "@/components/ConstraintBadge";
 import { PixelButton } from "@/components/PixelButton";
 import { PokemonSearchDropdown } from "@/components/PokemonSearchDropdown";
 import { ScoreBar } from "@/components/ScoreBar";
@@ -23,12 +24,6 @@ type RoundResultPayload = {
   pokemonId: number | null;
   pokemonName: string | null;
   scores: { id: string; score: number }[];
-};
-
-const DIFFICULTY_COLOR: Record<ConstraintPayload["difficulty"], string> = {
-  easy: "#9bbc0f",
-  medium: "#F8D030",
-  hard: "#c03028",
 };
 
 export default function GamePage() {
@@ -235,20 +230,7 @@ export default function GamePage() {
             <TypeBadge type={currentCombo[0]} large />
             <TypeBadge type={currentCombo[1]} large />
           </div>
-          {currentConstraint && (
-            <div
-              className="border-4 border-black bg-[#f7f4e7] px-4 py-3 max-w-2xl w-full flex flex-col items-center gap-2"
-              style={{ boxShadow: `4px 4px 0 0 ${DIFFICULTY_COLOR[currentConstraint.difficulty]}` }}
-            >
-              <span
-                className="font-press text-[10px] uppercase"
-                style={{ color: DIFFICULTY_COLOR[currentConstraint.difficulty] }}
-              >
-                Constraint · {currentConstraint.difficulty}
-              </span>
-              <p className="font-pixel text-2xl text-center">{currentConstraint.text}</p>
-            </div>
-          )}
+          <ConstraintBadge constraint={currentConstraint} />
         </section>
 
         <section className="space-y-3">
