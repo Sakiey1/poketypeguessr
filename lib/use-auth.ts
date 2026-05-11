@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { flushPendingScores } from "@/lib/leaderboard";
-import { getSupabase, SUPABASE_CONFIGURED } from "@/lib/supabase-client";
+import { getSupabase } from "@/lib/supabase-client";
 
 // -- Username + password identity over Supabase Auth ------------------------
 //
@@ -274,13 +274,9 @@ export type UsernameAvailability =
   | "invalid"
   | "checking"
   | "available"
-  | "taken"
-  | "unavailable";
+  | "taken";
 
-type AsyncResult = {
-  username: string;
-  outcome: "available" | "taken" | "unavailable";
-} | null;
+type AsyncResult = { username: string; outcome: "available" | "taken" } | null;
 
 export const useUsernameAvailability = (raw: string): UsernameAvailability => {
   const [asyncResult, setAsyncResult] = useState<AsyncResult>(null);
@@ -290,7 +286,6 @@ export const useUsernameAvailability = (raw: string): UsernameAvailability => {
 
   useEffect(() => {
     if (!formatOk) return;
-    if (!SUPABASE_CONFIGURED) return;
     const supabase = getSupabase();
     if (!supabase) return;
 
@@ -303,7 +298,7 @@ export const useUsernameAvailability = (raw: string): UsernameAvailability => {
         .maybeSingle();
       if (cancelled) return;
       if (error) {
-        setAsyncResult({ username: trimmed, outcome: "unavailable" });
+        setAsyncResult(null);
         return;
       }
       setAsyncResult({ username: trimmed, outcome: data ? "taken" : "available" });
@@ -317,7 +312,6 @@ export const useUsernameAvailability = (raw: string): UsernameAvailability => {
 
   if (raw.length === 0) return "idle";
   if (!formatOk) return "invalid";
-  if (!SUPABASE_CONFIGURED) return "unavailable";
   if (asyncResult && asyncResult.username === trimmed) return asyncResult.outcome;
   return "checking";
 };

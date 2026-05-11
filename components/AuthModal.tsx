@@ -238,12 +238,6 @@ function UsernameHint({
           That username is taken.
         </span>
       );
-    case "unavailable":
-      return (
-        <span className="mt-1 block font-pixel text-lg text-black/60">
-          Couldn&apos;t check right now. You can still try signing up.
-        </span>
-      );
     default:
       return null;
   }
