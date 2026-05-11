@@ -157,6 +157,12 @@ const extractRunToken = (payload: unknown): string | null => {
   );
 };
 
+const extractRunTokenSignature = (payload: unknown): string | null => {
+  if (!payload || typeof payload !== "object") return null;
+  const data = payload as Record<string, unknown>;
+  return asString(data.runTokenSignature) ?? asString(data.run_token_signature) ?? null;
+};
+
 const extractFinishedRow = (payload: unknown): RawRow | null => {
   const direct = normalizeRawRow(payload);
   if (direct) return direct;
@@ -299,11 +305,17 @@ const insertScore = async (
   if (!runToken) {
     return { error: "start_run_missing_token" };
   }
+  const runTokenSignature = extractRunTokenSignature(startData);
+  if (!runTokenSignature) {
+    return { error: "start_run_missing_signature" };
+  }
 
   const { data: finishData, error: finishError } = await supabase.functions.invoke("finish-run", {
     body: {
       runToken,
+      runTokenSignature,
       run_token: runToken,
+      run_token_signature: runTokenSignature,
       mode: payload.mode,
       correctCount: payload.correctCount,
       correct_count: payload.correctCount,
