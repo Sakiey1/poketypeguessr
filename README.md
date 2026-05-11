@@ -37,3 +37,14 @@ This repo includes Railway-ready config:
 - The server binds to Railway's `PORT` automatically via `server.js`.
 - Room/game state is in-memory, so it resets on redeploy or restart.
 - For production multiplayer reliability, run a single instance (or add shared state/adapter later).
+
+## Leaderboard Production Checklist
+
+Timed/race/endless score submissions now use Supabase Edge Functions (`start-run` then `finish-run`) instead of direct client inserts.
+
+- App env vars must include:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- Supabase Edge Function secrets must include:
+  - `RUN_TOKEN_SIGNING_SECRET` (required by run-token signing/verification)
+- Deploy the latest client build whenever run-token or function contracts change.

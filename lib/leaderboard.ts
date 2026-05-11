@@ -39,6 +39,9 @@ type RawRow = {
   profiles: { username: string } | { username: string }[] | null;
 };
 
+const SCORE_SELECT =
+  "id, user_id, mode, correct_count, elapsed_ms, longest_streak, target, skips_used, achieved_at, profiles ( username )";
+
 const PENDING_QUEUE_KEY = "pokeguess.speedmode.pending.v1";
 
 type PendingScore = {
@@ -88,6 +91,98 @@ const adaptRow = (row: RawRow): LeaderboardRow => {
   };
 };
 
+const asNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+
+const asString = (value: unknown): string | null => (typeof value === "string" ? value : null);
+
+const normalizeProfiles = (value: unknown): RawRow["profiles"] => {
+  if (Array.isArray(value)) return value as RawRow["profiles"];
+  if (value && typeof value === "object") return value as RawRow["profiles"];
+  return null;
+};
+
+const normalizeRawRow = (raw: unknown): RawRow | null => {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const id = asNumber(row.id);
+  const userId = asString(row.user_id) ?? asString(row.userId);
+  const mode = row.mode;
+  const correctCount = asNumber(row.correct_count) ?? asNumber(row.correctCount);
+  const elapsedMs = asNumber(row.elapsed_ms) ?? asNumber(row.elapsedMs);
+  const longestStreak = asNumber(row.longest_streak) ?? asNumber(row.longestStreak);
+  const targetRaw = row.target;
+  const skipsUsed = asNumber(row.skips_used) ?? asNumber(row.skipsUsed);
+  const achievedAt = asString(row.achieved_at) ?? asString(row.achievedAt);
+  const profileFromUsername =
+    asString(row.username) !== null ? ({ username: asString(row.username)! } as const) : null;
+  const profiles = normalizeProfiles(row.profiles ?? row.profile) ?? profileFromUsername;
+
+  if (
+    id === null ||
+    userId === null ||
+    (mode !== "timed" && mode !== "race" && mode !== "endless") ||
+    correctCount === null ||
+    elapsedMs === null ||
+    longestStreak === null ||
+    skipsUsed === null ||
+    achievedAt === null
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    user_id: userId,
+    mode,
+    correct_count: correctCount,
+    elapsed_ms: elapsedMs,
+    longest_streak: longestStreak,
+    target: typeof targetRaw === "number" || targetRaw === null ? targetRaw : null,
+    skips_used: skipsUsed,
+    achieved_at: achievedAt,
+    profiles,
+  };
+};
+
+const extractRunToken = (payload: unknown): string | null => {
+  if (!payload || typeof payload !== "object") return null;
+  const data = payload as Record<string, unknown>;
+  return (
+    asString(data.runToken) ??
+    asString(data.run_token) ??
+    asString(data.token) ??
+    asString(data.signedRunToken) ??
+    null
+  );
+};
+
+const extractFinishedRow = (payload: unknown): RawRow | null => {
+  const direct = normalizeRawRow(payload);
+  if (direct) return direct;
+  if (!payload || typeof payload !== "object") return null;
+  const data = payload as Record<string, unknown>;
+  return (
+    normalizeRawRow(data.row) ??
+    normalizeRawRow(data.score) ??
+    normalizeRawRow(data.leaderboardScore) ??
+    normalizeRawRow(data.result) ??
+    null
+  );
+};
+
+const extractFinishedRowId = (payload: unknown): number | null => {
+  if (!payload || typeof payload !== "object") return null;
+  const data = payload as Record<string, unknown>;
+  return (
+    asNumber(data.id) ??
+    asNumber(data.score_id) ??
+    asNumber(data.scoreId) ??
+    (data.row && typeof data.row === "object" ? asNumber((data.row as { id?: unknown }).id) : null) ??
+    null
+  );
+};
+
 const orderForMode = (mode: SpeedMode) => {
   switch (mode) {
     case "timed":
@@ -119,9 +214,7 @@ export const fetchTopScores = async (
 
   let query = supabase
     .from("leaderboard_scores")
-    .select(
-      "id, user_id, mode, correct_count, elapsed_ms, longest_streak, target, skips_used, achieved_at, profiles ( username )",
-    )
+    .select(SCORE_SELECT)
     .eq("mode", mode);
 
   for (const order of orderForMode(mode)) {
@@ -193,27 +286,71 @@ const insertScore = async (
   const supabase = getSupabase();
   if (!supabase) return { error: "supabase_missing" };
 
-  const insert = {
-    user_id: userId,
-    mode: payload.mode,
-    correct_count: payload.correctCount,
-    elapsed_ms: payload.elapsedMs,
-    longest_streak: payload.longestStreak,
-    target: payload.target,
-    skips_used: payload.skipsUsed,
-  };
-
-  const { data, error } = await supabase
-    .from("leaderboard_scores")
-    .insert(insert)
-    .select(
-      "id, user_id, mode, correct_count, elapsed_ms, longest_streak, target, skips_used, achieved_at, profiles ( username )",
-    )
-    .single();
-  if (error || !data) {
-    return { error: error?.message ?? "insert_failed" };
+  const { data: startData, error: startError } = await supabase.functions.invoke("start-run", {
+    body: {
+      mode: payload.mode,
+      target: payload.target,
+    },
+  });
+  if (startError) {
+    return { error: startError.message ?? "start_run_failed" };
   }
-  return adaptRow(data as unknown as RawRow);
+  const runToken = extractRunToken(startData);
+  if (!runToken) {
+    return { error: "start_run_missing_token" };
+  }
+
+  const { data: finishData, error: finishError } = await supabase.functions.invoke("finish-run", {
+    body: {
+      runToken,
+      run_token: runToken,
+      mode: payload.mode,
+      correctCount: payload.correctCount,
+      correct_count: payload.correctCount,
+      elapsedMs: payload.elapsedMs,
+      elapsed_ms: payload.elapsedMs,
+      longestStreak: payload.longestStreak,
+      longest_streak: payload.longestStreak,
+      target: payload.target,
+      skipsUsed: payload.skipsUsed,
+      skips_used: payload.skipsUsed,
+    },
+  });
+  if (finishError) {
+    return { error: finishError.message ?? "finish_run_failed" };
+  }
+
+  const finishedRow = extractFinishedRow(finishData);
+  if (finishedRow) {
+    return adaptRow(finishedRow);
+  }
+
+  const finishedId = extractFinishedRowId(finishData);
+  if (finishedId !== null) {
+    const { data, error } = await supabase
+      .from("leaderboard_scores")
+      .select(SCORE_SELECT)
+      .eq("id", finishedId)
+      .single();
+    if (!error && data) {
+      return adaptRow(data as unknown as RawRow);
+    }
+  }
+
+  // Defensive fallback: if function wrote the score but returned a minimal body,
+  // fetch the latest row for this user/mode.
+  const { data: fallbackData, error: fallbackError } = await supabase
+    .from("leaderboard_scores")
+    .select(SCORE_SELECT)
+    .eq("user_id", userId)
+    .eq("mode", payload.mode)
+    .order("achieved_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (fallbackError || !fallbackData) {
+    return { error: fallbackError?.message ?? "finish_run_no_row" };
+  }
+  return adaptRow(fallbackData as unknown as RawRow);
 };
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));

@@ -5,8 +5,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 // All auth + leaderboard work happens in the browser via this singleton.
 // We intentionally do NOT use @supabase/ssr because we have no server
 // components that need user identity, and Next.js 16's async cookies()/
-// proxy.ts changes would otherwise need their own plumbing. RLS policies
-// (`auth.uid() = user_id` for inserts) are what actually enforce ownership.
+// proxy.ts changes would otherwise need their own plumbing. Leaderboard writes
+// go through Supabase Edge Functions (`start-run` + `finish-run`) bound to the
+// authed session, and reads still flow through RLS-protected tables.
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
